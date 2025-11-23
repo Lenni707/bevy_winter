@@ -3,7 +3,7 @@ use rand::{Rng, thread_rng};
 use std::f32::consts::TAU;
 
 const SNOW_RADIUS: f32 = 40.0;
-const SNOW_DENSITY: usize = 40;
+const SNOW_PER_SECOND: f32 = 2400.0;
 const SPAWN_HEIGHT: f32 = 2.0;
 const GROUND_LEVEL: f32 = 0.0;
 
@@ -50,12 +50,17 @@ fn spawn_snowflakes(
     mut commands: Commands,
     assets: Res<SnowflakeAssets>,
     camera_query: Query<&GlobalTransform, With<Camera3d>>,
+    time: Res<Time>,
 ) {
     let Ok(cam_transform) = camera_query.single() else { return };
     let cam_pos = cam_transform.translation();
     let mut rng = thread_rng();
 
-    for _ in 0..SNOW_DENSITY {
+    // spawn every second
+    let dt = time.delta_secs();
+    let to_spawn = (SNOW_PER_SECOND * dt).round() as usize;
+
+    for _ in 0..to_spawn {
         let angle = rng.gen_range(0.0..TAU);
         let radius = SNOW_RADIUS * rng.gen_range(0.0..1.0f32).sqrt(); // größe
         

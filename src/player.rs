@@ -124,6 +124,8 @@ fn camera_movement(
     }
 }
 
+// snowball logic
+
 #[derive(Component)]
 pub struct Snowball {
     pub velocity: Vec3,
