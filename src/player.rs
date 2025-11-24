@@ -11,6 +11,7 @@ pub struct FlyCamera {
     pub speed: f32,
     pub velocity: Vec3,
     pub grounded: bool,
+    pub flying: bool,
 }
 
 impl Default for FlyCamera {
@@ -19,9 +20,10 @@ impl Default for FlyCamera {
             pitch: 0.0,
             yaw: 0.0,
             sensitivity: 0.002,
-            speed: 10.0,
+            speed: 100.0,
             velocity: Vec3::ZERO,
             grounded: true,
+            flying: false,
         }
     }
 }
@@ -78,49 +80,67 @@ fn camera_movement(
         return;
     };
 
+    // toggle flight
+    if keyboard.just_pressed(KeyCode::KeyF) {
+        camera.flying = !camera.flying;
+        camera.velocity = Vec3::ZERO;
+        if camera.flying {
+            camera.grounded = false;
+        }
+    }
+
     let dt = time.delta_secs();
-    
     let mut direction = Vec3::ZERO;
 
     let forward = *transform.forward();
     let right = *transform.right();
 
-    let forward_flat = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
-    let right_flat = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
+    if camera.flying {
+        // flying
+        if keyboard.pressed(KeyCode::KeyW) { direction += forward; }
+        if keyboard.pressed(KeyCode::KeyS) { direction -= forward; }
+        if keyboard.pressed(KeyCode::KeyA) { direction -= right; }
+        if keyboard.pressed(KeyCode::KeyD) { direction += right; }
+        
+        if keyboard.pressed(KeyCode::Space) { direction += Vec3::Y; }
+        if keyboard.pressed(KeyCode::ShiftLeft) { direction -= Vec3::Y; }
 
-    if keyboard.pressed(KeyCode::KeyW) {
-        direction += forward_flat;
-    }
-    if keyboard.pressed(KeyCode::KeyS) {
-        direction -= forward_flat;
-    }
-    if keyboard.pressed(KeyCode::KeyA) {
-        direction -= right_flat;
-    }
-    if keyboard.pressed(KeyCode::KeyD) {
-        direction += right_flat;
-    }
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
+        }
+        
+        transform.translation += direction * camera.speed * dt;
+    } else {
+        // walking
+        let forward_flat = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
+        let right_flat = Vec3::new(right.x, 0.0, right.z).normalize_or_zero();
 
-    if direction.length() > 0.0 {
-        direction = direction.normalize();
-    }
+        if keyboard.pressed(KeyCode::KeyW) { direction += forward_flat; }
+        if keyboard.pressed(KeyCode::KeyS) { direction -= forward_flat; }
+        if keyboard.pressed(KeyCode::KeyA) { direction -= right_flat; }
+        if keyboard.pressed(KeyCode::KeyD) { direction += right_flat; }
 
-    transform.translation += direction * camera.speed * dt;
+        if direction.length() > 0.0 {
+            direction = direction.normalize();
+        }
 
-    let gravity = -25.0;
+        transform.translation += direction * camera.speed * dt;
 
-    if camera.grounded && keyboard.just_pressed(KeyCode::Space) {
-        camera.velocity.y = 8.0;
-        camera.grounded = false;
-    }
+        let gravity = -25.0;
 
-    camera.velocity.y += gravity * dt;
-    transform.translation.y += camera.velocity.y * dt;
+        if camera.grounded && keyboard.just_pressed(KeyCode::Space) {
+            camera.velocity.y = 8.0;
+            camera.grounded = false;
+        }
 
-    if transform.translation.y <= 1.5 {
-        transform.translation.y = 1.5;
-        camera.velocity.y = 0.0;
-        camera.grounded = true;
+        camera.velocity.y += gravity * dt;
+        transform.translation.y += camera.velocity.y * dt;
+
+        if transform.translation.y <= 1.5 {
+            transform.translation.y = 1.5;
+            camera.velocity.y = 0.0;
+            camera.grounded = true;
+        }
     }
 }
 
@@ -191,6 +211,3 @@ fn handle_input(
         );
     }
 }
-
-
-
