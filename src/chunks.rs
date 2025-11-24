@@ -9,23 +9,15 @@ use crate::world_gen::*; // link to world gen module
 use crate::noise::NoiseGenerators;
 
 // biome shit
-pub const BIOME_FREQ: f64 = 0.0008;
+pub const BIOME_FREQ: f64 = 0.008;
 
-pub const RIVER_FREQ: f64 = 0.0015;
-pub const RIVER_WIDTH: f32 = 0.05;
-
-pub const PLAINS_SCALE: f32 = 0.5;
+pub const PLAINS_SCALE: f32 = 2.0;
 pub const FOREST_SCALE: f32 = 1.0;
-pub const MOUNTAIN_SCALE: f32 = 3.0;
-
-pub const CLIFF_SLOPE: f32 = 0.30;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Biome {
     Plains,
     Forest,
-    Mountains,
-    River
 }
 
 pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Mesh {
@@ -33,38 +25,35 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
     let mut colors: Vec<[f32; 4]> = Vec::new();
     let mut indices: Vec<u32> = Vec::new();
 
-    for z in 0..CHUNK_SIZE { // calc vertices
-        for x in 0..CHUNK_SIZE {
-            let world_x = (coord.x * CHUNK_SIZE as i32 + x as i32) as f64;
-            let world_z = (coord.z * CHUNK_SIZE as i32 + z as i32) as f64;
+    let stride = CHUNK_SIZE + 1;
 
-            // calc for rivers chatty meinte mit .abs sehen die cooler aus
-            let river_val = noise.river.get([world_x * RIVER_FREQ, world_z * RIVER_FREQ]).abs() as f32;
-            let is_river = river_val < RIVER_WIDTH;
+    for z in 0..=CHUNK_SIZE { // calc vertices
+        for x in 0..=CHUNK_SIZE {
+            let world_x = ((coord.x * CHUNK_SIZE as i32 + x as i32) as f64) * VERTEX_SPACING as f64;
+            let world_z = ((coord.z * CHUNK_SIZE as i32 + z as i32) as f64) * VERTEX_SPACING as f64;
 
             // calc für biomes
             let biome_val = noise.biome.get([world_x * BIOME_FREQ, world_z * BIOME_FREQ]) as f32;
 
-            // check which biome it is based on noise level
-            let biome = if is_river {
-                Biome::River
-            } else if biome_val < -0.2 {
-                Biome::Plains
-            } else if biome_val < 0.3 {
-                Biome::Forest
-            } else {
-                Biome::Mountains
-            };
+            // // check which biome it is based on noise level /brauch man nur fuer farbe ändern je nach biom
+            // let biome = if biome_val < -0.2 {
+            //     Biome::Plains
+            // } else {
+            //     Biome::Forest
+            // };
 
-            // height pro biom
+            // biome blend factor t (0 = plains, 1 = forest)
+            let t = ((biome_val + 0.2) / (0.3 + 0.2)).clamp(0.0, 1.0);
+
+            // base height from noise
             let base_h = noise.height.get([world_x * NOISE_FREQ, world_z * NOISE_FREQ]) as f32;
 
-            let height = match biome {
-                Biome::Plains => base_h * NOISE_AMP * PLAINS_SCALE,
-                Biome::Forest => base_h * NOISE_AMP * FOREST_SCALE,
-                Biome::Mountains => base_h.abs() * NOISE_AMP * MOUNTAIN_SCALE,
-                Biome::River => base_h * NOISE_AMP * PLAINS_SCALE,
-            };
+            // height per biome
+            let plains_h = base_h * NOISE_AMP * PLAINS_SCALE;
+            let forest_h = base_h * NOISE_AMP * FOREST_SCALE;
+
+            // final smooth height
+            let height = plains_h * (1.0 - t) + forest_h * t;
 
             positions.push([
                 x as f32 * VERTEX_SPACING,
@@ -72,42 +61,46 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
                 z as f32 * VERTEX_SPACING,
             ]);
 
-            // get steepness of slope
-            let h_l = noise.height.get([(world_x - 1.0) * NOISE_FREQ, world_z * NOISE_FREQ]) as f32;
-            let h_r = noise.height.get([(world_x + 1.0) * NOISE_FREQ, world_z * NOISE_FREQ]) as f32;
-            let h_u = noise.height.get([world_x * NOISE_FREQ, (world_z + 1.0) * NOISE_FREQ]) as f32;
-            let h_d = noise.height.get([world_x * NOISE_FREQ, (world_z - 1.0) * NOISE_FREQ]) as f32;
+            // // height spcifc colour of snow
+            // let h_norm = (height / 30.0).clamp(0.0, 1.0);
 
-            let slope = ((h_l - h_r).abs() + (h_u - h_d).abs()) * 0.5;
+            // let base_snow = Vec3::new(0.85, 0.9, 1.0);
+            // let tinted_snow = Vec3::new(0.75, 0.8, 0.95);
 
-            let color = if biome == Biome::River {
-                [0.15, 0.55, 0.90, 1.0]
-            } else if slope > CLIFF_SLOPE {
-                [0.25, 0.25, 0.25, 1.0]
-            } else {
-                match biome {
-                    Biome::Plains   => [0.70, 1.0, 0.70, 1.0],
-                    Biome::Forest   => [0.10, 0.40, 0.10, 1.0],
-                    Biome::Mountains => [1.0, 1.0, 1.0, 1.0],
-                    Biome::River => unreachable!(),
-                }
-            };
+            // let c = base_snow * (1.0 - h_norm) + tinted_snow * h_norm;
 
-            colors.push(color);
+            // colors.push([c.x, c.y, c.z, 1.0]);
+
+            // // biom specifc colour
+            // let color = match biome {
+            //     Biome::Plains   => [1.0, 1.0, 1.0, 1.0],
+            //     Biome::Forest   => [1.0, 1.0, 1.0, 1.0],
+            // };
+
+            // colors.push(color);
+            
+            // einfach so ein bisschen variation
+            let noise_variation = noise.height.get([world_x * 0.2, world_z * 0.2]) as f32 * 0.05;
+
+            let r = 0.85 + noise_variation;
+            let g = 0.90 + noise_variation;
+            let b = 1.00 + noise_variation;
+
+            colors.push([r, g, b, 1.0]);
         }
     }
 
-    for z in 0..CHUNK_SIZE - 1 { // calc indices (triangles connecting vertices)
-        for x in 0..CHUNK_SIZE - 1 {
-            let i = z * CHUNK_SIZE + x;
+    for z in 0..CHUNK_SIZE { // calc indices (triangles connecting vertices)
+        for x in 0..CHUNK_SIZE {
+            let i = z * stride + x;
 
             indices.extend_from_slice(&[
                 i as u32,
-                (i + CHUNK_SIZE) as u32,
+                (i + stride) as u32,
                 (i + 1) as u32,
                 (i + 1) as u32,
-                (i + CHUNK_SIZE) as u32,
-                (i + CHUNK_SIZE + 1) as u32,
+                (i + stride) as u32,
+                (i + stride + 1) as u32,
             ]);
         }
     }
@@ -123,4 +116,47 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
     mesh.compute_normals();
 
     mesh
+}
+
+
+pub fn get_height(world_x: f64, world_z: f64, noise: &NoiseGenerators) -> f32 {
+    let wx = world_x as f64;
+    let wz = world_z as f64;
+
+    // biome blend factor
+    let biome_val = noise.biome.get([wx * BIOME_FREQ, wz * BIOME_FREQ]) as f32;
+    let t = ((biome_val + 0.2) / 0.5).clamp(0.0, 1.0);
+
+    // base noise
+    let base_h = noise.height.get([wx * NOISE_FREQ, wz * NOISE_FREQ]) as f32;
+
+    // biome heights
+    let plains_h = base_h * NOISE_AMP * PLAINS_SCALE;
+    let forest_h = base_h * NOISE_AMP * FOREST_SCALE;
+
+    // smooth blended height
+    plains_h * (1.0 - t) + forest_h * t
+}
+
+
+pub fn should_tree_spawn(
+    world_x: f64,
+    world_z: f64,
+    noise: &NoiseGenerators,
+) -> bool {
+    let biome_val = noise.biome.get([world_x * BIOME_FREQ, world_z * BIOME_FREQ]) as f32;
+   
+    let t = ((biome_val + 0.2) / 0.5).clamp(0.0, 1.0);
+
+    let tree_frequency = lerp(0.03, 0.25, t);
+
+    let tree_noise = noise.tree.get([world_x * 0.14, world_z * 0.14]) as f32; // how close they spawn together somewhere here
+    let tree_noise = (tree_noise + 1.0) * 0.5;
+
+    tree_noise < tree_frequency
+}
+
+// linear interpolation helper von chatty
+fn lerp(a: f32, b: f32, t: f32) -> f32 {
+    a * (1.0 - t) + b * t
 }

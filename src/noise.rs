@@ -5,7 +5,7 @@ use bevy::prelude::*;
 pub struct NoiseGenerators {
     pub height: Perlin,
     pub biome: Perlin,
-    pub river: Perlin,
+    pub tree: Perlin,
 }
 
 impl NoiseGenerators {
@@ -13,7 +13,7 @@ impl NoiseGenerators {
         Self {
             height: Perlin::new().set_seed(seed), 
             biome: Perlin::new().set_seed(seed + 69),
-            river: Perlin::new().set_seed(seed + 420),
+            tree: Perlin::new().set_seed(seed + 89),
         }
     }
 }

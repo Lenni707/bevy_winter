@@ -64,19 +64,12 @@ pub fn detect_biome(x: f32, z: f32, noise: &NoiseGenerators) -> Biome {
     let bz: f64 = z as f64 * BIOME_FREQ;
 
     let biome_val: f32 = noise.biome.get([bx, bz]) as f32;
-    let river_val: f32 = noise.river.get([x as f64 * 0.0015, z as f64 * 0.0015]).abs() as f32;
-
-    if river_val < 0.05 {
-        return Biome::River;
-    }
 
     if biome_val < -0.2 {
-        Biome::Plains
-    } else if biome_val < 0.3 {
-        Biome::Forest
-    } else {
-        Biome::Mountains
-    }
+        return Biome::Plains
+    } else{
+        return Biome::Forest
+    };
 }
 
 fn update_hud(

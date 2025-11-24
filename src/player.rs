@@ -3,6 +3,9 @@ use bevy::window::{CursorGrabMode, PrimaryWindow};
 use std::f32::consts::FRAC_PI_2;
 use bevy::core_pipeline::bloom::Bloom;
 
+use crate::noise::NoiseGenerators;
+use crate::chunks::get_height;
+
 #[derive(Component)]
 pub struct FlyCamera {
     pub pitch: f32,
@@ -20,7 +23,7 @@ impl Default for FlyCamera {
             pitch: 0.0,
             yaw: 0.0,
             sensitivity: 0.002,
-            speed: 100.0,
+            speed: 10.0,
             velocity: Vec3::ZERO,
             grounded: true,
             flying: false,
@@ -74,6 +77,7 @@ fn camera_look(
 fn camera_movement(
     keyboard: Res<ButtonInput<KeyCode>>,
     time: Res<Time>,
+    noise: Res<NoiseGenerators>,  
     mut query: Query<(&mut Transform, &mut FlyCamera)>,
 ) {
     let Ok((mut transform, mut camera)) = query.single_mut() else {
@@ -109,7 +113,7 @@ fn camera_movement(
             direction = direction.normalize();
         }
         
-        transform.translation += direction * camera.speed * dt;
+        transform.translation += direction * camera.speed * 3.0 * dt; // * 3.0 to make flying fastern than walking
     } else {
         // walking
         let forward_flat = Vec3::new(forward.x, 0.0, forward.z).normalize_or_zero();
@@ -136,8 +140,17 @@ fn camera_movement(
         camera.velocity.y += gravity * dt;
         transform.translation.y += camera.velocity.y * dt;
 
-        if transform.translation.y <= 1.5 {
-            transform.translation.y = 1.5;
+        let terrain_h = get_height(
+            transform.translation.x as f64,
+            transform.translation.z as f64,
+            &noise,
+        );
+
+        let player_height = 1.0;
+        let ground_y = terrain_h + player_height;
+
+        if transform.translation.y <= ground_y {
+            transform.translation.y = ground_y;
             camera.velocity.y = 0.0;
             camera.grounded = true;
         }
@@ -150,8 +163,6 @@ fn camera_movement(
 pub struct Snowball {
     pub velocity: Vec3,
 }
-
-const GROUND_LEVEL: f32 = 0.0;
 
 fn spawn_snowball(
     commands: &mut Commands,
@@ -177,6 +188,7 @@ fn spawn_snowball(
 fn move_snowballs(
     time: Res<Time>,
     mut query: Query<(Entity, &mut Transform, &mut Snowball)>,
+    noise: Res<NoiseGenerators>,
     mut commands: Commands
 ) {
     let dt = time.delta_secs();
@@ -184,15 +196,22 @@ fn move_snowballs(
 
     for (entity, mut t, mut ball) in query.iter_mut() {
         t.translation += ball.velocity * dt;
-        // gravity
         ball.velocity.y -= gravity * dt;
+
+        // get height of ground
+        let terrain_h = get_height(
+            t.translation.x as f64,
+            t.translation.z as f64,
+            &noise,
+        );
         // despawn if on ground
-        if t.translation.y <= GROUND_LEVEL {
+        if t.translation.y <= terrain_h {
             commands.entity(entity).despawn();
             continue;
         }
     }
 }
+
 
 fn handle_input(
     mouse: Res<ButtonInput<MouseButton>>,

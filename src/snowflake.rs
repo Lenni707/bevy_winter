@@ -1,11 +1,14 @@
 use bevy::prelude::*;
 use rand::{Rng, thread_rng};
 use std::f32::consts::TAU;
+use bevy::pbr::NotShadowCaster;
 
 const SNOW_RADIUS: f32 = 40.0;
 const SNOW_PER_SECOND: f32 = 2400.0;
 const SPAWN_HEIGHT: f32 = 2.0;
-const GROUND_LEVEL: f32 = 0.0;
+
+use crate::noise::NoiseGenerators;
+use crate::chunks::get_height;
 
 pub struct SnowflakePlugin;
 
@@ -72,6 +75,7 @@ fn spawn_snowflakes(
         commands.spawn((
             Mesh3d(assets.mesh.clone()),
             MeshMaterial3d(assets.material.clone()),
+            NotShadowCaster,
             Transform::from_xyz(x, y, z),
             Snowflake {
                 velocity: Vec3::new(0.0, -rng.gen_range(2.0..4.0), 0.0),
@@ -90,6 +94,7 @@ fn update_snowflakes(
     time: Res<Time>,
     camera_query: Query<&GlobalTransform, With<Camera3d>>,
     mut query: Query<(Entity, &mut Transform, &Snowflake)>,
+    noise: Res<NoiseGenerators>,
 ) {
     let dt = time.delta_secs();
     let cam_pos = camera_query.single().map(|t| t.translation()).unwrap_or(Vec3::ZERO);
@@ -101,11 +106,18 @@ fn update_snowflakes(
         transform.rotate_local_y(snowflake.rotation_speed.y * dt);
         transform.rotate_local_z(snowflake.rotation_speed.z * dt);
 
-        if transform.translation.y <= GROUND_LEVEL {
+        // höhe von terrain ausrechnen
+        let terrain_h = get_height(
+            transform.translation.x as f64,
+            transform.translation.z as f64,
+            &noise,
+        );
+        // despawnen when unter der ausgerechneten höhe
+        if transform.translation.y <= terrain_h {
             commands.entity(entity).despawn();
             continue;
         }
-
+        // despawnen, wenn aus reichweite von Player
         if transform.translation.xz().distance_squared(cam_pos.xz()) > despawn_dist_sq {
             commands.entity(entity).despawn();
         }
