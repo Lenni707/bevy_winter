@@ -574,15 +574,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "bevy_fps"
-version = "0.1.0"
-dependencies = [
- "bevy",
- "noise",
- "rand 0.8.5",
-]
-
-[[package]]
 name = "bevy_gilrs"
 version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1309,6 +1300,15 @@ dependencies = [
  "web-sys",
  "wgpu-types",
  "winit",
+]
+
+[[package]]
+name = "bevy_winter"
+version = "0.1.0"
+dependencies = [
+ "bevy",
+ "noise",
+ "rand 0.8.5",
 ]
 
 [[package]]
