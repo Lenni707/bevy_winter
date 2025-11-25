@@ -128,7 +128,12 @@ fn camera_movement(
             direction = direction.normalize();
         }
 
-        transform.translation += direction * camera.speed * dt;
+        if keyboard.pressed(KeyCode::KeyQ) {
+            transform.translation += direction * camera.speed * dt * 2.0;
+        }
+        else {
+            transform.translation += direction * camera.speed * dt
+        }
 
         let gravity = -25.0;
 

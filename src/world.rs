@@ -22,6 +22,7 @@ fn setup_lighting(mut commands: Commands) {
     ));
 }
 
+
 // fn spawn_ground(
 //     mut commands: Commands,
 //     mut meshes: ResMut<Assets<Mesh>>,

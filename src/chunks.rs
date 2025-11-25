@@ -32,28 +32,7 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
             let world_x = ((coord.x * CHUNK_SIZE as i32 + x as i32) as f64) * VERTEX_SPACING as f64;
             let world_z = ((coord.z * CHUNK_SIZE as i32 + z as i32) as f64) * VERTEX_SPACING as f64;
 
-            // calc für biomes
-            let biome_val = noise.biome.get([world_x * BIOME_FREQ, world_z * BIOME_FREQ]) as f32;
-
-            // // check which biome it is based on noise level /brauch man nur fuer farbe ändern je nach biom
-            // let biome = if biome_val < -0.2 {
-            //     Biome::Plains
-            // } else {
-            //     Biome::Forest
-            // };
-
-            // biome blend factor t (0 = plains, 1 = forest)
-            let t = ((biome_val + 0.2) / (0.3 + 0.2)).clamp(0.0, 1.0);
-
-            // base height from noise
-            let base_h = noise.height.get([world_x * NOISE_FREQ, world_z * NOISE_FREQ]) as f32;
-
-            // height per biome
-            let plains_h = base_h * NOISE_AMP * PLAINS_SCALE;
-            let forest_h = base_h * NOISE_AMP * FOREST_SCALE;
-
-            // final smooth height
-            let height = plains_h * (1.0 - t) + forest_h * t;
+            let height = get_height(world_x, world_z, noise);
 
             positions.push([
                 x as f32 * VERTEX_SPACING,
@@ -80,11 +59,13 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
             // colors.push(color);
             
             // einfach so ein bisschen variation
-            let noise_variation = noise.height.get([world_x * 0.2, world_z * 0.2]) as f32 * 0.05;
+            let n = noise.height.get([world_x * 0.15, world_z * 0.15]) as f32;
 
-            let r = 0.85 + noise_variation;
-            let g = 0.90 + noise_variation;
-            let b = 1.00 + noise_variation;
+            let variation = n * 0.03;
+
+            let r = (0.88 + variation * 0.4).clamp(0.0, 1.0);
+            let g = (0.93 + variation * 0.6).clamp(0.0, 1.0);
+            let b = (1.00 + variation * 1.0).clamp(0.0, 1.0);
 
             colors.push([r, g, b, 1.0]);
         }
@@ -120,22 +101,38 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
 
 
 pub fn get_height(world_x: f64, world_z: f64, noise: &NoiseGenerators) -> f32 {
-    let wx = world_x as f64;
-    let wz = world_z as f64;
+    // calc für biomes
+        let biome_val = noise.biome.get([world_x * BIOME_FREQ, world_z * BIOME_FREQ]) as f32;
 
-    // biome blend factor
-    let biome_val = noise.biome.get([wx * BIOME_FREQ, wz * BIOME_FREQ]) as f32;
-    let t = ((biome_val + 0.2) / 0.5).clamp(0.0, 1.0);
+        // // check which biome it is based on noise level /brauch man nur fuer farbe ändern je nach biom
+        // let biome = if biome_val < -0.2 {
+        //     Biome::Plains
+        // } else {
+        //     Biome::Forest
+        // };
 
-    // base noise
-    let base_h = noise.height.get([wx * NOISE_FREQ, wz * NOISE_FREQ]) as f32;
+        // biome blend factor t (0 = plains, 1 = forest)
+        let t = ((biome_val + 0.2) / (0.3 + 0.2)).clamp(0.0, 1.0);
 
-    // biome heights
-    let plains_h = base_h * NOISE_AMP * PLAINS_SCALE;
-    let forest_h = base_h * NOISE_AMP * FOREST_SCALE;
+        // base height from noise
+        let base_h = noise.height.get([world_x * NOISE_FREQ, world_z * NOISE_FREQ]) as f32;
 
-    // smooth blended height
-    plains_h * (1.0 - t) + forest_h * t
+        // height per biome
+        let plains_h = base_h * NOISE_AMP * PLAINS_SCALE;
+        let forest_h = base_h * NOISE_AMP * FOREST_SCALE;
+
+        // final smooth height
+        let mut height = plains_h * (1.0 - t) + forest_h * t;
+
+        let erosion = noise.height.get([world_x * 0.03, world_z * 0.03]) as f32 * 2.0;
+
+        // rounded snow drifts
+        let drift_n = noise.height.get([world_x * 0.01, world_z * 0.01]) as f32;
+        let drifts = drift_n.abs().powf(2.0) * 6.0;
+
+        height += erosion + drifts;
+        // returns height
+        height
 }
 
 
