@@ -16,6 +16,7 @@ pub struct FlyCamera {
     pub velocity: Vec3,
     pub grounded: bool,
     pub flying: bool,
+    pub sledding: bool,
 }
 
 impl Default for FlyCamera {
@@ -28,6 +29,7 @@ impl Default for FlyCamera {
             velocity: Vec3::ZERO,
             grounded: true,
             flying: false,
+            sledding: false
         }
     }
 }
@@ -36,7 +38,7 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (spawn_camera, grab_cursor))
+        app.add_systems(Startup, (spawn_camera, grab_cursor, load_slead))
             .add_systems(Update, (camera_movement, camera_look, handle_input, move_snowballs));
     }
 }
@@ -233,7 +235,11 @@ fn handle_input(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    mut cam_state_query: Query<&mut FlyCamera, With<Camera3d>>,
+    sled_query: Query<Entity, With<SledEntity>>,
+    sled: Res<Sled>,
 ) {
+
     if mouse.just_pressed(MouseButton::Left) {
         let Ok(cam) = camera_query.single() else { return };
         spawn_snowball(
@@ -243,12 +249,29 @@ fn handle_input(
             cam,
         );
     }
+
+    if mouse.just_pressed(MouseButton::Right) {
+        let Ok(cam_transform) = camera_query.single() else { return };
+        let Ok(mut cam_state) = cam_state_query.single_mut() else { return };
+
+        if !cam_state.sledding {
+            spawn_sled(&mut commands, cam_transform, &sled, &mut cam_state);
+        } else {
+            if let Ok(sled_entity) = sled_query.single() {
+                commands.entity(sled_entity).despawn();
+                cam_state.sledding = false;
+            }
+        }
+    }
 }
 
 #[derive(Resource)]
 pub struct Sled {
     pub handle: Handle<Scene>,
 }
+
+#[derive(Component)]
+pub struct SledEntity;
 
 fn load_slead(
     mut commands: Commands,
@@ -262,20 +285,21 @@ fn load_slead(
 }
 
 fn spawn_sled(
-    mut commands: Commands,
-    camera_query: Query<Entity, With<Camera3d>>,
-    sled: Res<Sled>
+    commands: &mut Commands,
+    cam_transform: &Transform,
+    sled: &Sled,
+    cam_state: &mut FlyCamera,
 ) {
-    let Ok(cam_entity) = camera_query.single() else {
-        return;
-    };
+    let spawn_pos = cam_transform.translation - Vec3::new(-0.5, 1.0, 0.7);
 
-    commands.entity(cam_entity).with_children(|parent| {
-        parent.spawn((
-            SceneRoot(sled.handle.clone()),
-            Transform::from_xyz(0.0, -0.5, -1.0),
-        ));
-    });
+    commands.spawn((
+        SledEntity,
+        SceneRoot(sled.handle.clone()),
+        Transform::from_translation(spawn_pos)
+            .with_scale(Vec3::splat(0.5)),
+    ));
+
+    cam_state.sledding = true;
 }
 
 fn update_sledding(
