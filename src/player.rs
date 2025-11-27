@@ -235,12 +235,13 @@ fn move_snowballs(
 
 fn handle_input(
     mouse: Res<ButtonInput<MouseButton>>,
-    camera_query: Query<&Transform, With<Camera3d>>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut cam_state_query: Query<&mut FlyCamera, With<Camera3d>>,
-    sled_query: Query<Entity, With<SledEntity>>,
+    sled_entity_query: Query<Entity, With<SledEntity>>,
+    sled_transform_query: Query<&Transform, With<SledEntity>>,
     sled: Res<Sled>,
 ) {
 
@@ -260,8 +261,9 @@ fn handle_input(
 
         if !cam_state.sledding {
             spawn_sled(&mut commands, cam_transform, &sled, &mut cam_state);
+            update_sledding(commands, camera_query, sled_transform_query, &sled);
         } else {
-            if let Ok(sled_entity) = sled_query.single() {
+            if let Ok(sled_entity) = sled_entity_query.single() {
                 commands.entity(sled_entity).despawn();
                 cam_state.sledding = false;
             }
@@ -311,10 +313,25 @@ fn spawn_sled(
     cam_state.sledding = true;
 }
 
-fn update_sledding(
-    mut commands: Commands,
-    camera_query: Query<&Transform, With<Camera3d>>,
-    sled: &Sled
+// helper function, so the camera sticks to the sled
+fn update_cam_pos_for_sled(
+    sled_query: Query<&Transform, With<SledEntity>>,
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
 ) {
-
+    if let Ok(sled_transform) = sled_query.single() {
+            if let Ok(mut cam_transform) = camera_query.single_mut() {
+                cam_transform.translation = sled_transform.translation + Vec3::new(0.0, 1.75, 0.0);
+            }
+    }
 }
+
+fn update_sledding(
+    commands: Commands, // mutable Commands if modifying entities
+    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    sled_query: Query<&Transform, With<SledEntity>>,
+    sled: &Sled,
+) {
+    update_cam_pos_for_sled(sled_query, camera_query);
+}
+
+// fucking fix alles, irgendwas mit den parametern ist falsch und deswegen geht es nicht
