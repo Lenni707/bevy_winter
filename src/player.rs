@@ -343,7 +343,7 @@ fn sledding_system(
 
     let dt = time.delta_secs();
 
-    let gravity = Vec3::new(0.0, -25.0, 0.0); // match your "walking gravity" feel
+    let gravity = Vec3::new(0.0, -10.0, 0.0); // match your "walking gravity" feel
     let wx = sled_t.translation.x as f64;
     let wz = sled_t.translation.z as f64;
 
@@ -351,7 +351,7 @@ fn sledding_system(
     let accel = acceleration_on_slope(normal, gravity);
 
     // optional damping so it doesn't accelerate forever
-    let damping = 0.9999_f32;
+    let damping = 0.98_f32;
     motion.velocity *= damping;
 
     motion.velocity += accel * dt;
@@ -359,8 +359,10 @@ fn sledding_system(
 
     // keep sled on terrain
     let terrain_h = get_height(sled_t.translation.x as f64, sled_t.translation.z as f64, &noise);
-    sled_t.translation.y = terrain_h; // tweak if your sled needs an offset above ground
 
+    if sled_t.translation.y < terrain_h {
+        sled_t.translation.y = terrain_h;
+    }
     // stick camera to sled
     cam_t.translation = sled_t.translation + Vec3::new(0.0, 1.75, 0.0);
 }

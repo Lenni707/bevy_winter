@@ -61,7 +61,7 @@ pub fn calc_to_generate_chunk(coord: ChunkCoord, noise: &NoiseGenerators,) -> Me
             // einfach so ein bisschen variation
             let n = noise.height.get([world_x * 0.15, world_z * 0.15]) as f32;
 
-            let variation = n * 0.03;
+            let variation = n * 0.25;
 
             let r = (0.88 + variation * 0.4).clamp(0.0, 1.0);
             let g = (0.93 + variation * 0.6).clamp(0.0, 1.0);
