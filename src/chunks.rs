@@ -128,6 +128,20 @@ pub fn get_height(world_x: f64, world_z: f64, noise: &NoiseGenerators) -> f32 {
     height
 }
 
+pub fn get_surface_normal(world_x: f64, world_z: f64, noise: &NoiseGenerators) -> Vec3 {
+    let e = VERTEX_SPACING as f64; // sample step in world units
+
+    let h_l = get_height(world_x - e, world_z, noise);
+    let h_r = get_height(world_x + e, world_z, noise);
+    let h_d = get_height(world_x, world_z - e, noise);
+    let h_u = get_height(world_x, world_z + e, noise);
+
+    let dhdx = (h_r - h_l) / (2.0 * e as f32);
+    let dhdz = (h_u - h_d) / (2.0 * e as f32);
+
+    // For y = h(x,z)
+    Vec3::new(-dhdx, 1.0, -dhdz).normalize()
+}
 
 pub fn should_tree_spawn(
     world_x: f64,

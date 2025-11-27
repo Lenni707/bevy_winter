@@ -5,6 +5,7 @@ use bevy::core_pipeline::bloom::Bloom;
 
 use crate::noise::NoiseGenerators;
 use crate::chunks::get_height;
+use crate::chunks::get_surface_normal;
 use crate::world_gen::*;
 
 #[derive(Component)]
@@ -39,7 +40,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (spawn_camera, grab_cursor, load_slead))
-            .add_systems(Update, (camera_movement, camera_look, handle_input, move_snowballs));
+            .add_systems(Update, (camera_movement, camera_look, handle_input, move_snowballs, sledding_system));
     }
 }
 
@@ -99,6 +100,10 @@ fn camera_movement(
     let Ok((mut transform, mut camera)) = query.single_mut() else {
         return;
     };
+    // check if sledding
+    if camera.sledding {
+        return;
+    }
 
     // toggle flight
     if keyboard.just_pressed(KeyCode::KeyF) {
@@ -235,13 +240,12 @@ fn move_snowballs(
 
 fn handle_input(
     mouse: Res<ButtonInput<MouseButton>>,
-    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+    mut camera_query: Query<&mut Transform, (With<Camera3d>, Without<SledEntity>)>,
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut cam_state_query: Query<&mut FlyCamera, With<Camera3d>>,
     sled_entity_query: Query<Entity, With<SledEntity>>,
-    sled_transform_query: Query<&Transform, With<SledEntity>>,
     sled: Res<Sled>,
 ) {
 
@@ -256,17 +260,16 @@ fn handle_input(
     }
 
     if mouse.just_pressed(MouseButton::Right) {
-        let Ok(cam_transform) = camera_query.single() else { return };
+        let Ok(cam_transform) = camera_query.single_mut() else { return };
         let Ok(mut cam_state) = cam_state_query.single_mut() else { return };
 
         if !cam_state.sledding {
-            spawn_sled(&mut commands, cam_transform, &sled, &mut cam_state);
-            update_sledding(commands, camera_query, sled_transform_query, &sled);
+            spawn_sled(&mut commands, &*cam_transform, &sled, &mut cam_state);
         } else {
             if let Ok(sled_entity) = sled_entity_query.single() {
                 commands.entity(sled_entity).despawn();
-                cam_state.sledding = false;
             }
+            cam_state.sledding = false;
         }
     }
 }
@@ -302,6 +305,7 @@ fn spawn_sled(
 
     commands.spawn((
         SledEntity,
+        SledMotion::default(),
         SceneRoot(sled.handle.clone()),
         Transform {
             translation: spawn_pos,
@@ -313,25 +317,55 @@ fn spawn_sled(
     cam_state.sledding = true;
 }
 
+#[derive(Component, Default)]
+pub struct SledMotion {
+    pub velocity: Vec3,
+}
+
 // helper function, so the camera sticks to the sled
-fn update_cam_pos_for_sled(
-    sled_query: Query<&Transform, With<SledEntity>>,
-    mut camera_query: Query<&mut Transform, With<Camera3d>>,
+fn sledding_system(
+    time: Res<Time>,
+    noise: Res<NoiseGenerators>,
+    mut cam_q: Query<(&mut Transform, &mut FlyCamera), (With<Camera3d>, Without<SledEntity>)>,
+    mut sled_q: Query<(&mut Transform, &mut SledMotion), (With<SledEntity>, Without<Camera3d>)>,
 ) {
-    if let Ok(sled_transform) = sled_query.single() {
-            if let Ok(mut cam_transform) = camera_query.single_mut() {
-                cam_transform.translation = sled_transform.translation + Vec3::new(0.0, 1.75, 0.0);
-            }
+    let Ok((mut cam_t, mut cam_state)) = cam_q.single_mut() else { return };
+
+    if !cam_state.sledding {
+        return;
     }
+
+    let Ok((mut sled_t, mut motion)) = sled_q.single_mut() else {
+        // sled got despawned but state wasn't reset
+        cam_state.sledding = false;
+        return;
+    };
+
+    let dt = time.delta_secs();
+
+    let gravity = Vec3::new(0.0, -25.0, 0.0); // match your "walking gravity" feel
+    let wx = sled_t.translation.x as f64;
+    let wz = sled_t.translation.z as f64;
+
+    let normal = get_surface_normal(wx, wz, &noise);
+    let accel = acceleration_on_slope(normal, gravity);
+
+    // optional damping so it doesn't accelerate forever
+    let damping = 0.9999_f32;
+    motion.velocity *= damping;
+
+    motion.velocity += accel * dt;
+    sled_t.translation += motion.velocity * dt * 5.0;
+
+    // keep sled on terrain
+    let terrain_h = get_height(sled_t.translation.x as f64, sled_t.translation.z as f64, &noise);
+    sled_t.translation.y = terrain_h; // tweak if your sled needs an offset above ground
+
+    // stick camera to sled
+    cam_t.translation = sled_t.translation + Vec3::new(0.0, 1.75, 0.0);
 }
 
-fn update_sledding(
-    commands: Commands, // mutable Commands if modifying entities
-    mut camera_query: Query<&mut Transform, With<Camera3d>>,
-    sled_query: Query<&Transform, With<SledEntity>>,
-    sled: &Sled,
-) {
-    update_cam_pos_for_sled(sled_query, camera_query);
+fn acceleration_on_slope(normal: Vec3, gravity: Vec3) -> Vec3 {
+    let n = normal.normalize();
+    gravity - n * gravity.dot(n) // gravity projected into the slope plane
 }
-
-// fucking fix alles, irgendwas mit den parametern ist falsch und deswegen geht es nicht
